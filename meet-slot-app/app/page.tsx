@@ -1,9 +1,7 @@
-import Image from "next/image";
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth';
 
-export default function Home() {
-  return (
-    <div>
-      Meet Slot App
-    </div>
-  );
+export default async function Home() {
+  const session = await getCurrentUser();
+  redirect(session ? '/rooms' : '/login');
 }
