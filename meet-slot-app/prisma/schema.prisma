@@ -4,26 +4,27 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id              String    @id @default(uuid()) 
-  email           String    @unique
-  name            String
-  passwordHash    String
-  isEmailVerified Boolean   @default(false)
-  verifToken      String?   @unique
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String
+  passwordHash      String
+  isEmailVerified   Boolean   @default(false)
+  verificationToken String?   @unique
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  bookings        Booking[] 
+  bookings          Booking[]
 
   @@map("users")
 }
@@ -51,8 +52,6 @@ model Booking {
 
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  recurringGroupId String?
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
