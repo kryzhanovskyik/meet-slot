@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Meet Slot — бронювання переговорних
 
-## Getting Started
+Веб-застосунок для бронювання переговорних кімнат в офісі: розклад на тиждень, бронювання вільних слотів,
+скасування власних бронювань. Зроблено для конкурсу UA-Skills (event2).
 
-First, run the development server:
+## Стек
+
+- **Мова:** TypeScript
+- **Фронтенд/бекенд:** Next.js 16 (App Router, Route Handlers) + React 19
+- **База даних:** PostgreSQL через Prisma ORM
+- **Стилі:** Tailwind CSS 4
+- **Тести:** Vitest
+- **Аутентифікація:** сесія на httpOnly JWT-кукі (`jose`), паролі — `bcryptjs`
+
+## Запуск
+
+### Варіант 1 — Docker Compose (одна команда)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
+docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Піднімає Postgres і сам застосунок, автоматично застосовує міграції та накатує сіди
+(див. `Dockerfile` — команда запуску: `prisma migrate deploy && seed && next start`).
+Застосунок буде доступний на **http://localhost:3000**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Варіант 2 — локально
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Потрібен Node.js 20+ і запущений Postgres (найпростіше — лише база з docker compose).
 
-## Learn More
+```bash
+cp .env.example .env
+docker compose up -d postgres      # лише база, на порту 5433
+npm install
+npx prisma migrate dev             # застосувати міграції
+npm run db:seed                    # застосувати сіди (кімнати, тестові користувачі, демо-бронювання)
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Застосунок буде на **http://localhost:3000**.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Тести
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm test
+```
 
-## Deploy on Vercel
+Юніт-тести покривають логіку перетину інтервалів (впритул, часткове перекриття, повний збіг,
+сусідні дні) та перевірку робочих годин/вирівнювання слотів — `tests/time.test.ts`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Тестові користувачі
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Створюються сідом (`prisma/seed.ts`), пошта вже підтверджена — можна одразу логінитись:
+
+| Ім'я           | Email               | Пароль        |
+| -------------- | ------------------- | ------------- |
+| Іван Петренко  | ivan@example.com    | password123   |
+| Олена Коваль   | olena@example.com   | password123   |
+
+Сід також створює 6 переговорних кімнат і кілька демо-бронювань (частина в майбутньому — видно в сітці
+розкладу і на вкладці «Майбутні», частина в минулому — видно на вкладці «Минулі»).
+
+## Як влаштована перевірка перетинів
+
+Уся логіка — чисті функції в `lib/time.ts`, без залежності від Prisma чи Next.js, тому вона юніт-тестована
+напряму (`tests/time.test.ts`). Два бронювання перетинаються, якщо `aStart < bEnd && bStart < aEnd` —
+строга нерівність навмисно дозволяє бронюванням стикатися впритул (10:00–11:00 і 11:00–12:00 — це два
+коректні бронювання, як і вимагає ТЗ).
+
+На сервері (`POST /api/bookings`) ця перевірка виконується всередині `db.$transaction` з
+`isolationLevel: Serializable`: спочатку шукається бронювання, що перетинається з новим, і якщо перетину
+немає — створюється запис. Under serializable isolation Postgres сам виявляє конфлікт, якщо два запити
+одночасно пройшли перевірку для одного й того ж слота: один з них отримає помилку серіалізації
+(`P2034`), яку API мапить у `409 Слот вже зайнятий`. Так гарантується, що при двох одночасних запитах
+на один слот у базі опиниться рівно одне бронювання (бонус «Захист від гонки»).
+
+## Як зберігається час
+
+У базі всі дати — `DateTime` (Postgres `timestamptz`), тобто фактично UTC. Ніякого «часу без поясу» ніде
+немає.
+
+- **Клієнт** будує час слота через звичайний `Date` у поясі браузера (`new Date(y, m, d, h, min)`), тому
+  жодних ручних конверсій на фронтенді не потрібно — при відправці на сервер він серіалізується в UTC
+  ISO-рядок.
+- **Сітка розкладу** будується в поясі користувача: 7 днів тижня і 48 получасових рядків (00:00–23:30) —
+  дні визначаються локальним календарем браузера, а не офісним. Слоти поза робочими годинами офісу
+  показані сірим і недоступні для кліку.
+- **Перевірка робочих годин** (09:00–19:00 `Europe/Kyiv`) виконується на сервері окремо від часового поясу
+  користувача: `Intl.DateTimeFormat` з `timeZone: 'Europe/Kyiv'` конвертує UTC-момент у офісний
+  wall-clock час і звіряє його з межами робочого дня. Це коректно враховує перехід на літній/зимовий час
+  в Україні, бо `Intl` завжди читає актуальні правила IANA-часового поясу для конкретної дати.
+- **Вирівнювання на 30 хвилин** перевіряється по UTC-хвилинах (`getUTCMinutes() % 30 === 0`) — це
+  рівнозначно перевірці по офісному часу, бо зсув Києва відносно UTC завжди цілу кількість годин
+  (+2 або +3), а не пів години.
+- **Спрощення** (свідомо, задокументовано тут): бронювання прив'язується до дня сітки за своїм *початком*
+  у поясі користувача — тобто рядок у «Моїх бронюваннях» і позиція в сітці визначаються локальною датою
+  `startTime`. Для офісу в Києві та типових робочих поясів (Європа, частина Азії/Америки) це завжди дає
+  очікуваний результат; лише для користувачів з екстремальним зсувом відносно Києва (де 19:00 офісу
+  переходить через їхню локальну північ) бронювання може виглядати «зсунутим» на сусідній день у сітці —
+  такий випадок з реальним офісом у Києві практично не трапляється.
+
+## Бонуси, які реалізовано
+
+- **Docker compose однією командою** — `docker compose up --build` піднімає базу + застосунок з міграціями
+  та сідами.
+- **Підтвердження email у dev-режимі** — після реєстрації посилання для підтвердження виводиться в консоль
+  сервера; без підтвердження увійти не можна.
+- **Захист від гонки** при одночасному бронюванні одного слота (`SERIALIZABLE`-транзакція, див. вище).
+- **Фільтр кімнат за місткістю** — поле «Місткість від» на сторінці списку кімнат.
+
+Не реалізовано (свідомо, через обмеження часу): щотижневі повторювані бронювання, сповіщення про кінець
+бронювання, інтеграційні тести API, повноцінний мобільний сценарій (базова адаптивність є — сітка
+скролиться горизонтально, картки перелаштовуються в колонку, — але спеціально під телефон не
+доопрацьовано).
+
+## Структура проєкту
+
+```
+app/                 сторінки (App Router) і Route Handlers (app/api/**)
+components/           клієнтські React-компоненти (сітка розкладу, форми, діалоги)
+lib/                  бізнес-логіка: час/робочі години (time.ts), auth, prisma-клієнт
+prisma/               schema.prisma, міграції, seed.ts
+tests/                юніт-тести (Vitest)
+```
+
+## Env-змінні
+
+Див. `.env.example`. `DATABASE_URL` — рядок підключення до Postgres, `JWT_SECRET` — секрет для підпису
+сесійних JWT, `NEXT_PUBLIC_APP_URL` — базовий URL для посилання підтвердження email у логах сервера.
