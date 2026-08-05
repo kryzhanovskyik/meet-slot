@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
+import { Header } from '@/components/header';
 
 type FieldErrors = { name?: string; email?: string; password?: string };
 
@@ -50,8 +51,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-57px)] items-center justify-center px-4 py-10">
-      <div className="card w-full max-w-sm p-6">
+    <div className="flex min-h-dvh flex-col bg-(--background)">
+      <Header />
+      <div className="flex flex-1 items-center justify-center px-4 py-10">
+      <div className="card animate-fade-in-up w-full max-w-sm p-6">
         <h1 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">Реєстрація</h1>
         <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Створіть обліковий запис, щоб бронювати переговорні.</p>
 
@@ -129,6 +132,7 @@ export default function RegisterPage() {
             </p>
           </form>
         )}
+      </div>
       </div>
     </div>
   );

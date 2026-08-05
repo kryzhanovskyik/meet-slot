@@ -1,16 +1,20 @@
 @import "tailwindcss";
 
+/* Manual light/dark toggle: `.dark` on <html> wins over the OS preference.
+   Set as early as possible (see the inline script in app/layout.tsx) to avoid a flash. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -18,16 +22,31 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Semantic surface tokens — components reference these (`bg-(--surface)`, etc.)
+   instead of hardcoding slate-900/950 per element, so both themes recolor from one place. */
 :root {
-  --background: #f8fafc;
+  --background: #f4f6fb;
   --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --border-subtle: #eef1f5;
+  --border-strong: #cbd5e1;
+  /* Fill for unbookable (past / outside office hours) schedule cells — just a hair darker
+     than --surface, barely-there like Google Calendar's greyed-out slots, but still a shade
+     darker than the grid lines (--border-subtle) so those stay visible on top of it. */
+  --unavailable: #f7f9fb;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b1120;
-    --foreground: #e2e8f0;
-  }
+.dark {
+  --background: #090a0f;
+  --foreground: #e4e6ea;
+  --surface: #14161f;
+  --surface-2: #1d202b;
+  --border: #34384a;
+  --border-subtle: #262a38;
+  --border-strong: #454a60;
+  --unavailable: #1a1d27;
 }
 
 body {
@@ -35,26 +54,70 @@ body {
   color: var(--foreground);
 }
 
+/* Shared entrance animations — applied via utility classes below.
+   Keep them short and subtle; they should read as "responsive UI", not "look at me". */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out both;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.25s ease-out both;
+}
+.animate-scale-in {
+  animation: scale-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Motion-sensitive visitors: collapse every animation/transition to an instant swap
+   instead of trying to cherry-pick which ones are "safe". */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Room/floor accent dots — cycled by index, not tied to a specific floor name. */
+.floor-dot-0 { background-color: #3b82f6; }
+.floor-dot-1 { background-color: #10b981; }
+.floor-dot-2 { background-color: #8b5cf6; }
+.floor-dot-3 { background-color: #6366f1; }
+.floor-dot-4 { background-color: #14b8a6; }
+.floor-dot-5 { background-color: #e11d48; }
+
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 bg-brand-600 text-white hover:bg-brand-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-[background-color,transform,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60 bg-brand-600 hover:bg-brand-700 active:scale-[0.97] active:bg-brand-800 disabled:active:scale-100;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-(--border) bg-(--surface) px-4 py-2 text-sm font-medium text-slate-700 transition-[background-color,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-60 hover:bg-(--surface-2) active:scale-[0.97] disabled:active:scale-100 dark:text-slate-200;
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 bg-red-600 text-white hover:bg-red-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-[background-color,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-60 bg-red-600 hover:bg-red-700 active:scale-[0.97] disabled:active:scale-100;
   }
   .field-label {
     @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
   }
   .field-input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800;
+    @apply w-full rounded-lg border border-(--border-strong) bg-(--surface) px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:bg-(--surface-2) dark:text-slate-100;
   }
   .field-error {
     @apply mt-1 text-sm text-red-600 dark:text-red-400;
   }
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+    @apply rounded-xl border border-(--border) bg-(--surface) shadow-sm;
   }
 }

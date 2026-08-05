@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
-import { Header } from "@/components/header";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +18,17 @@ export const metadata: Metadata = {
   description: "Бронювання переговорних кімнат в офісі",
 };
 
+// Applies the saved/system theme before first paint, so the page never flashes the wrong mode.
+const THEME_INIT_SCRIPT = `
+(function () {
+  try {
+    var stored = localStorage.getItem('theme');
+    var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,12 +38,15 @@ export default function RootLayout({
     <html
       lang="uk"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The theme-init script below adds/removes `dark` before hydration, which
+      // intentionally differs from the server-rendered class list.
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col">
-        <AuthProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-        </AuthProvider>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="h-full">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

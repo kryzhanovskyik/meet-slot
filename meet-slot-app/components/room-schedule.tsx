@@ -1,18 +1,43 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
+import { AppShell } from '@/components/app-shell';
 import { WeekGrid } from '@/components/week-grid';
 import { CreateBookingDialog } from '@/components/create-booking-dialog';
 import { BookingDetailsDialog, type ScheduleBooking } from '@/components/booking-details-dialog';
-import { OFFICE_CLOSE_HOUR, OFFICE_OPEN_HOUR, OFFICE_TIMEZONE, addDays, formatDateKey, getUtcOffsetLabel, getWeekStart, parseDateKey } from '@/lib/time';
+import {
+  OFFICE_CLOSE_HOUR,
+  OFFICE_OPEN_HOUR,
+  addDays,
+  formatDateKey,
+  getWeekStart,
+  isInFuture,
+  isWithinOfficeHours,
+  parseDateKey,
+} from '@/lib/time';
 
 const WEEK_RANGE_FORMATTER = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'short' });
 const WEEK_RANGE_YEAR_FORMATTER = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
 
 type Room = { id: string; name: string; floor: number; capacity: number };
 type LoadState = 'loading' | 'error' | 'ready';
+
+/** First half-hour slot, starting now, that actually falls inside office hours. */
+function findNextBookableSlot(): Date {
+  const slot = new Date();
+  slot.setSeconds(0, 0);
+  const remainder = slot.getMinutes() % 30;
+  slot.setMinutes(slot.getMinutes() + (remainder === 0 ? 0 : 30 - remainder));
+
+  for (let i = 0; i < 14 * 48; i++) {
+    const end = new Date(slot.getTime() + 30 * 60_000);
+    if (isWithinOfficeHours(slot, end) && isInFuture(slot)) return slot;
+    slot.setMinutes(slot.getMinutes() + 30);
+  }
+  return slot;
+}
 
 export function RoomSchedule({ roomId, initialWeek }: { roomId: string; initialWeek?: string }) {
   const router = useRouter();
@@ -73,67 +98,96 @@ export function RoomSchedule({ roomId, initialWeek }: { roomId: string; initialW
     router.replace(`/rooms/${roomId}?week=${formatDateKey(next)}`, { scroll: false });
   }
 
-  const officeOffset = getUtcOffsetLabel(OFFICE_TIMEZONE);
-  const userOffset = userTimeZone ? getUtcOffsetLabel(userTimeZone) : null;
-  const showTimezoneBanner = userTimeZone !== null && userTimeZone !== OFFICE_TIMEZONE;
+  const showTimezoneBanner = userTimeZone !== null && userTimeZone !== 'Europe/Kyiv';
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">{room?.name ?? 'Кімната'}</h1>
-        {room && (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Поверх {room.floor} · {room.capacity} осіб · робочі години {OFFICE_OPEN_HOUR}:00–{OFFICE_CLOSE_HOUR}:00 за часом офісу
-          </p>
-        )}
-      </div>
+  const topBarContent = useMemo(
+    () => (
+      <div className="flex items-center gap-2">
+        <span className="hidden shrink-0 text-base font-semibold text-slate-900 sm:inline dark:text-white">Кімнати</span>
 
-      {showTimezoneBanner && (
-        <div className="mb-4 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-          Час показано у вашому поясі ({userTimeZone}, {userOffset}). Офіс працює за {OFFICE_TIMEZONE} ({officeOffset}).
-        </div>
-      )}
-
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn-secondary" onClick={() => weekStart && goToWeek(addDays(weekStart, -7))} disabled={!weekStart}>
-            ← Попередній тиждень
-          </button>
-          <button type="button" className="btn-secondary" onClick={() => goToWeek(getWeekStart(new Date()))} disabled={!weekStart}>
+        <div className="ml-0 flex shrink-0 items-center gap-1 sm:ml-2">
+          <button type="button" className="btn-secondary px-3 py-1.5" onClick={() => goToWeek(getWeekStart(new Date()))} disabled={!weekStart}>
             Сьогодні
           </button>
-          <button type="button" className="btn-secondary" onClick={() => weekStart && goToWeek(addDays(weekStart, 7))} disabled={!weekStart}>
-            Наступний тиждень →
+          <button
+            type="button"
+            aria-label="Попередній тиждень"
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-(--surface-2) disabled:opacity-40 dark:text-slate-400"
+            onClick={() => weekStart && goToWeek(addDays(weekStart, -7))}
+            disabled={!weekStart}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 010 1.06L9.06 10l3.73 3.71a.75.75 0 11-1.06 1.06l-4.25-4.25a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 0z" clipRule="evenodd" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Наступний тиждень"
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-(--surface-2) disabled:opacity-40 dark:text-slate-400"
+            onClick={() => weekStart && goToWeek(addDays(weekStart, 7))}
+            disabled={!weekStart}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 010-1.06L10.94 10 7.21 6.29a.75.75 0 111.06-1.06l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06 0z" clipRule="evenodd" />
+            </svg>
           </button>
         </div>
+
         {weekStart && (
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          <p className="shrink-0 text-sm font-medium whitespace-nowrap text-slate-600 dark:text-slate-300">
             {WEEK_RANGE_FORMATTER.format(weekStart)} – {WEEK_RANGE_YEAR_FORMATTER.format(addDays(weekStart, 6))}
           </p>
         )}
       </div>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekStart]
+  );
 
-      {(!weekStart || state === 'loading') && <div className="card h-[600px] animate-pulse" />}
+  return (
+    <AppShell
+      topBarContent={topBarContent}
+      selectedDate={weekStart}
+      onSelectDate={(date) => goToWeek(getWeekStart(date))}
+      onCreateClick={room ? () => setCreatingSlot(findNextBookableSlot()) : undefined}
+    >
+      <div className="p-4 sm:p-6">
+        {room && (
+          <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">
+            {room.name} · Поверх {room.floor} · {room.capacity} осіб · робочі години {OFFICE_OPEN_HOUR}:00–{OFFICE_CLOSE_HOUR}:00 за часом офісу
+          </p>
+        )}
 
-      {weekStart && state === 'error' && (
-        <div className="card p-8 text-center">
-          <p className="font-medium text-slate-900 dark:text-white">Не вдалося завантажити розклад</p>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Сервер недоступний. Спробуйте оновити сторінку.</p>
-          <button type="button" className="btn-primary mt-4" onClick={() => loadBookings()}>
-            Спробувати ще раз
-          </button>
-        </div>
-      )}
+        {room && <p className="mb-3 text-xs text-slate-400 sm:hidden dark:text-slate-500">Прокрутіть таблицю вбік, щоб побачити інші дні →</p>}
 
-      {weekStart && state === 'ready' && user && (
-        <WeekGrid
-          weekStart={weekStart}
-          bookings={bookings}
-          currentUserId={user.id}
-          onSlotClick={setCreatingSlot}
-          onBookingClick={setViewingBooking}
-        />
-      )}
+        {showTimezoneBanner && (
+          <div className="mb-4 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+            Час показано у вашому поясі ({userTimeZone}). Офіс працює за Europe/Kyiv.
+          </div>
+        )}
+
+        {(!weekStart || state === 'loading') && <div className="card h-[600px] animate-pulse" />}
+
+        {weekStart && state === 'error' && (
+          <div className="card p-8 text-center">
+            <p className="font-medium text-slate-900 dark:text-white">Не вдалося завантажити розклад</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Сервер недоступний. Спробуйте оновити сторінку.</p>
+            <button type="button" className="btn-primary mt-4" onClick={() => loadBookings()}>
+              Спробувати ще раз
+            </button>
+          </div>
+        )}
+
+        {weekStart && state === 'ready' && user && (
+          <WeekGrid
+            weekStart={weekStart}
+            bookings={bookings}
+            currentUserId={user.id}
+            onSlotClick={setCreatingSlot}
+            onBookingClick={setViewingBooking}
+          />
+        )}
+      </div>
 
       {creatingSlot && room && (
         <CreateBookingDialog
@@ -159,6 +213,6 @@ export function RoomSchedule({ roomId, initialWeek }: { roomId: string; initialW
           }}
         />
       )}
-    </div>
+    </AppShell>
   );
 }
