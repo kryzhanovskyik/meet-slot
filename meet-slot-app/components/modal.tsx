@@ -12,12 +12,15 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" onClick={onClose}>
+    <div
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="card w-full max-w-md p-6"
+        className="animate-scale-in w-full max-w-md rounded-2xl border border-(--border) bg-(--surface) p-6 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

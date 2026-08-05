@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
+import { Header } from '@/components/header';
 
 function LoginForm() {
   const router = useRouter();
@@ -51,7 +52,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="card w-full max-w-sm p-6">
+    <div className="card animate-fade-in-up w-full max-w-sm p-6">
       <h1 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">Вхід</h1>
       <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Увійдіть, щоб побачити розклад переговорних.</p>
 
@@ -109,10 +110,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-[calc(100vh-57px)] items-center justify-center px-4 py-10">
-      <Suspense>
-        <LoginForm />
-      </Suspense>
+    <div className="flex min-h-dvh flex-col bg-(--background)">
+      <Header />
+      <div className="flex flex-1 items-center justify-center px-4 py-10">
+        <Suspense>
+          <LoginForm />
+        </Suspense>
+      </div>
     </div>
   );
 }

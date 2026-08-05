@@ -114,3 +114,26 @@ export function getUtcOffsetLabel(timeZone: string, date: Date = new Date()): st
   const offset = parts.find((part) => part.type === 'timeZoneName')?.value;
   return offset ?? 'UTC';
 }
+
+/** Minutes east of UTC for `timeZone`, e.g. Europe/Kyiv in summer -> 180. */
+export function getUtcOffsetMinutes(timeZone: string, date: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'longOffset',
+  }).formatToParts(date);
+  const raw = parts.find((part) => part.type === 'timeZoneName')?.value ?? 'GMT+0';
+  const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(raw);
+  if (!match) return 0;
+  const [, sign, hours, minutes = '0'] = match;
+  const total = Number(hours) * 60 + Number(minutes);
+  return sign === '-' ? -total : total;
+}
+
+/** How many whole hours the visitor's clock is ahead/behind the office's, e.g. "-1 год" or "+2 год". */
+export function getOfficeTimeDiffLabel(userTimeZone: string, officeTimeZone: string = OFFICE_TIMEZONE, date: Date = new Date()): string | null {
+  const diffMinutes = getUtcOffsetMinutes(userTimeZone, date) - getUtcOffsetMinutes(officeTimeZone, date);
+  if (diffMinutes === 0) return null;
+  const diffHours = diffMinutes / 60;
+  const sign = diffHours > 0 ? '+' : '';
+  return `${sign}${diffHours} год`;
+}
