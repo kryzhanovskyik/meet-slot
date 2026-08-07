@@ -84,7 +84,10 @@ export function Sidebar({ selectedDate, onSelectDate, onCreateClick, isMobileOpe
           </button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+        {/* `min-h-0` is what makes the scrolling work: a flex item's min-height defaults to
+            its content, so without it this column grows past the viewport and pushes the nav
+            below the fold instead of scrolling. */}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         {onCreateClick ? (
           <button type="button" onClick={onCreateClick} className="btn-primary w-full">
             <span className="text-base leading-none">+</span> Створити
